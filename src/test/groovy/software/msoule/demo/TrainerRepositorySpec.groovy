@@ -5,16 +5,16 @@ import org.springframework.boot.test.context.SpringBootTest
 import spock.lang.Specification
 
 @SpringBootTest
-class PersonRepositorySpec extends Specification {
+class TrainerRepositorySpec extends Specification {
 
     @Autowired
-    private PersonRepository personRepository
+    private TrainerRepository trainerRepository
 
-    void "save mark"() {
+    void "save ash"() {
         given:
-            def mark = new Person("mark")
+            def ash = Trainer.builder().name("Ash").build()
         when:
-            def result = personRepository.save(mark)
+            def result = trainerRepository.save(ash)
         then:
             result
     }
