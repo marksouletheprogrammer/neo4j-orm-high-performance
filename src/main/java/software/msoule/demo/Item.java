@@ -15,8 +15,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("PC")
-public class PC {
+@Node("Item")
+public class Item {
 
     @Id
     @GeneratedValue
@@ -24,9 +24,10 @@ public class PC {
 
     private String uuid;
 
-    @Relationship("HAS_BOX")
-    private List<Box> boxes;
+    private String name;
 
-    @Relationship("CONTAINS")
-    private List<Item> itemBox;
+    private int sellValue;
+
+    private String effect;
+
 }

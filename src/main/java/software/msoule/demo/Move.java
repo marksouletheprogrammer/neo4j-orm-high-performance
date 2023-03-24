@@ -25,7 +25,7 @@ public class Move {
 
     private String description;
 
-    private int power;
+    private int attackPower;
 
     private int accuracy;
 

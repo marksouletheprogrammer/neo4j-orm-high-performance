@@ -28,6 +28,9 @@ public class Trainer {
     @Relationship("HAS_ON_TEAM")
     private List<Pokemon> team;
 
+    @Relationship("HAS_ITEM")
+    private List<Item> inventory;
+
     @Relationship("OWNS")
     private Pokedex pokedex;
 

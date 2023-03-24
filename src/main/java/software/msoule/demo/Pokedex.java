@@ -23,7 +23,6 @@ public class Pokedex {
     private Long id;
 
     private String uuid;
-    private String name;
 
     @Relationship("CATALOGS")
     private List<PokedexEntry> entries;

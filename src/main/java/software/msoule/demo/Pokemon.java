@@ -1,9 +1,6 @@
 package software.msoule.demo;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
@@ -39,5 +36,8 @@ public class Pokemon {
 
     @Relationship("PREVIOUS_TRAINER")
     private Trainer previousOwner;
+
+    @Relationship("HOLDING")
+    private Item heldItem;
 
 }
