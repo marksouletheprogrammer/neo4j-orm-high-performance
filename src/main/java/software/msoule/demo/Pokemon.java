@@ -34,9 +34,6 @@ public class Pokemon {
     @Relationship("BELONGS_TO")
     private Trainer owner;
 
-    @Relationship("PREVIOUS_TRAINER")
-    private Trainer previousOwner;
-
     @Relationship("HOLDING")
     private Item heldItem;
 

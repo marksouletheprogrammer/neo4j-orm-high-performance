@@ -74,6 +74,7 @@ class TestDataGenerator {
                 .type2(randomEnum(Element.class))
                 .moves(generateLearnMoves(moves, 15))
                 .baseStats(generateStats())
+                .evolutions([] as Set)
                 .build()
             )
         }
@@ -125,7 +126,6 @@ class TestDataGenerator {
             pokemon.add(Pokemon.builder()
                 .uuid(UUID.randomUUID().toString())
                 .nickname("testNickname" + i)
-                .previousOwner(null)
                 .species(species.get(i))
                 .stats(generateStats())
                 .moves(moves)
@@ -142,6 +142,7 @@ class TestDataGenerator {
             def boxPokemon = pokemon.subList(i * boxSize, (i * boxSize) + boxSize)
             boxes.add(Box.builder()
                 .uuid(UUID.randomUUID().toString())
+                .name("testBox" + i)
                 .pokemon(boxPokemon)
                 .build())
         }
