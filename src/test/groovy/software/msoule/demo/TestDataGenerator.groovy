@@ -1,9 +1,7 @@
 package software.msoule.demo
 
 import java.security.SecureRandom
-import java.util.stream.Collectors
 
-// TODO a lot of this needs javadoc
 class TestDataGenerator {
 
     static List<Move> generateMoves(int numMoves) {
@@ -40,14 +38,10 @@ class TestDataGenerator {
                 .build()
     }
 
-    static List<LearnMove> generateLearnMoves(List<Move> moves, int numLearn) {
+    static List<Move> generateLearnMoves(List<Move> moves, int numLearn) {
         def learnMoves = new ArrayList()
         for (int i = 0; i < numLearn; i++) {
-            learnMoves.add(LearnMove.builder()
-                .move(moves.get(pickIndex(moves.size())))
-                .level(numLearn * 4)
-                .build()
-            )
+            learnMoves.add(moves.get(pickIndex(moves.size())))
         }
         return learnMoves
     }
@@ -83,16 +77,8 @@ class TestDataGenerator {
             def specHigh = species.get(i)
             def specMid = species.get(i - 1)
             def specLow = species.get(i - 2)
-            def evolutionLowToMid = Set.of(Evolution.builder()
-                    .evolutionType(randomEnum(EvolutionType.class))
-                    .level(pickStatValue(0, 100))
-                    .evolution(specMid)
-                    .build())
-            def evolutionMidToHigh = Set.of(Evolution.builder()
-                    .evolutionType(randomEnum(EvolutionType.class))
-                    .level(pickStatValue(0, 100))
-                    .evolution(specHigh)
-                    .build())
+            def evolutionLowToMid = Set.of(specMid)
+            def evolutionMidToHigh = Set.of(specHigh)
             specLow.setEvolutions(evolutionLowToMid)
             specMid.setEvolutions(evolutionMidToHigh)
         }
@@ -121,8 +107,7 @@ class TestDataGenerator {
                     .getMoves()
                     .subList(0, 4)
                     .stream()
-                    .map(LearnMove::getMove)
-                    .collect(Collectors.toList())
+                    .toList()
             pokemon.add(Pokemon.builder()
                 .uuid(UUID.randomUUID().toString())
                 .nickname("testNickname" + i)
@@ -149,12 +134,12 @@ class TestDataGenerator {
         return boxes
     }
 
-    // todo javadoc [low, high)
+    // [low, high)
     static int pickIndex(int length) {
         return (int) (Math.random() * length);
     }
 
-    // todo javadoc [low, high)
+    // [low, high)
     static int pickStatValue(int low, int high) {
         return (int) (Math.random() * (high - low)) + low;
     }

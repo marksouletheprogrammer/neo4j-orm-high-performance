@@ -1,13 +1,10 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.List;
 
@@ -15,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("Pokedex")
+@Entity
 public class Pokedex {
 
     @Id
@@ -24,6 +21,7 @@ public class Pokedex {
 
     private String uuid;
 
-    @Relationship("CATALOGS")
+    @OneToMany
+    @JoinColumn(name = "entry_id")
     private List<PokedexEntry> entries;
 }

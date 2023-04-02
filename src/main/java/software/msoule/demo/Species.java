@@ -1,13 +1,10 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.List;
 import java.util.Set;
@@ -16,7 +13,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("Species")
+@Entity
 public class Species {
 
     @Id
@@ -26,17 +23,20 @@ public class Species {
     private String uuid;
     private String name;
 
-    @Relationship("HAS_STATS")
+    @OneToOne
+    @JoinColumn(name = "stats_id")
     private Stats baseStats;
 
     private Element type1;
 
     private Element type2;
 
-    @Relationship("LEARNS_MOVE")
-    private List<LearnMove> moves;
+    @OneToMany
+    @JoinColumn(name = "learn_move_id")
+    private List<Move> moves;
 
-    @Relationship("EVOLVES_INTO")
-    private Set<Evolution> evolutions;
+    @OneToMany
+    @JoinColumn(name = "species_id")
+    private Set<Species> evolutions;
 
 }

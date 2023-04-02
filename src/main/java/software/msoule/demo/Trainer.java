@@ -1,13 +1,10 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.List;
 
@@ -15,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node
+@Entity
 public class Trainer {
 
     @Id
@@ -25,16 +22,20 @@ public class Trainer {
     private String uuid;
     private String name;
 
-    @Relationship("HAS_ON_TEAM")
+    @OneToMany
+    @JoinColumn(name = "team_id")
     private List<Pokemon> team;
 
-    @Relationship("HAS_ITEM")
+    @OneToMany
+    @JoinColumn(name = "inventory_id")
     private List<Item> inventory;
 
-    @Relationship("OWNS")
+    @OneToOne
+    @JoinColumn(name = "pokedex_id")
     private Pokedex pokedex;
 
-    @Relationship("ACCESS_TO")
+    @OneToOne
+    @JoinColumn(name = "pc_id")
     private PC pc;
 
 

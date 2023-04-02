@@ -1,13 +1,10 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.List;
 
@@ -15,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("PC")
+@Entity
 public class PC {
 
     @Id
@@ -24,9 +21,11 @@ public class PC {
 
     private String uuid;
 
-    @Relationship("HAS_BOX")
+    @OneToMany
+    @JoinColumn(name = "box_id")
     private List<Box> boxes;
 
-    @Relationship("CONTAINS")
+    @OneToMany
+    @JoinColumn(name = "item_storage_id")
     private List<Item> itemBox;
 }

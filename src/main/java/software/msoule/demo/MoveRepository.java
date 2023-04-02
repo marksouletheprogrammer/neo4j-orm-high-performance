@@ -1,7 +1,7 @@
 package software.msoule.demo;
 
-import org.springframework.data.neo4j.repository.Neo4jRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface MoveRepository extends Neo4jRepository<Move, Long> {
+public interface MoveRepository extends JpaRepository<Move, Long> {
 
 }

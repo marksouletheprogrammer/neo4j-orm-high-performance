@@ -1,19 +1,16 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("PokedexEntry")
+@Entity
 public class PokedexEntry {
 
     @Id
@@ -27,7 +24,8 @@ public class PokedexEntry {
     private String description;
     private int number;
 
-    @Relationship("ENTRY_FOR")
+    @OneToOne
+    @JoinColumn(name = "species_id")
     private Species species;
 
 

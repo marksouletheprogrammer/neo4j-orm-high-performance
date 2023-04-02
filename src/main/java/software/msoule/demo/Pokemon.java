@@ -1,10 +1,7 @@
 package software.msoule.demo;
 
+import jakarta.persistence.*;
 import lombok.*;
-import org.springframework.data.neo4j.core.schema.GeneratedValue;
-import org.springframework.data.neo4j.core.schema.Id;
-import org.springframework.data.neo4j.core.schema.Node;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.List;
 
@@ -12,7 +9,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder(toBuilder = true)
-@Node("Pokemon")
+@Entity
 public class Pokemon {
 
     @Id
@@ -22,19 +19,24 @@ public class Pokemon {
     private String uuid;
     private String nickname;
 
-    @Relationship("HAS_MOVE")
+    @OneToMany
+    @JoinColumn(name = "has_move_id")
     private List<Move> moves;
 
-    @Relationship("HAS_STATS")
+    @OneToOne
+    @JoinColumn(name = "stats_id")
     private Stats stats;
 
-    @Relationship("IS_A")
+    @ManyToOne
+    @JoinColumn(name = "species_id")
     private Species species;
 
-    @Relationship("BELONGS_TO")
+    @ManyToOne
+    @JoinColumn(name = "trainer_id")
     private Trainer owner;
 
-    @Relationship("HOLDING")
+    @OneToOne
+    @JoinColumn(name = "item_id")
     private Item heldItem;
 
 }

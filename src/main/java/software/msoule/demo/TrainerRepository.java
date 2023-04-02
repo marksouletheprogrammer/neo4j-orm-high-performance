@@ -1,11 +1,7 @@
 package software.msoule.demo;
 
-import org.springframework.data.neo4j.repository.Neo4jRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface TrainerRepository extends Neo4jRepository<Trainer, Long>, TrainerCustomRepository {
-
-    Trainer findByName(String name);
-
-    Trainer findByUuid(String uuid);
+public interface TrainerRepository extends JpaRepository<Trainer, Long> {
 
 }
