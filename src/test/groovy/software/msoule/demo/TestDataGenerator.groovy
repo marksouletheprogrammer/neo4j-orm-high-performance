@@ -3,7 +3,8 @@ package software.msoule.demo
 import java.security.SecureRandom
 import java.util.stream.Collectors
 
-// TODO a lot of this needs javadoc
+// Generates the entire data model for tests.
+// A lot of the numbers are arbitrary. It's just here to generate a sufficently large and interesting graph.
 class TestDataGenerator {
 
     static List<Move> generateMoves(int numMoves) {
@@ -149,16 +150,17 @@ class TestDataGenerator {
         return boxes
     }
 
-    // todo javadoc [low, high)
+    // Randomly pick an index based on length.
     static int pickIndex(int length) {
         return (int) (Math.random() * length);
     }
 
-    // todo javadoc [low, high)
+    // [low, high)
     static int pickStatValue(int low, int high) {
         return (int) (Math.random() * (high - low)) + low;
     }
 
+    // Randomly picks an enum value for a given Enum type.
     static final SecureRandom random = new SecureRandom();
     static <T extends Enum<?>> T randomEnum(Class<T> clazz){
         int x = random.nextInt(clazz.getEnumConstants().length);

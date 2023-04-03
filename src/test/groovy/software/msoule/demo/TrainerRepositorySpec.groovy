@@ -22,6 +22,10 @@ class TrainerRepositorySpec extends Specification {
     @Autowired
     private TrainerRepository trainerRepository
 
+    private final int NUM_MOVES = 913
+    private final int NUM_SPECIES = 905
+    private final int NUM_ITEMS = 200
+
     def setup() {
         try (var session = driver.session()) {
             // Drop all indexes.
@@ -40,83 +44,78 @@ class TrainerRepositorySpec extends Specification {
         }
     }
 
-    // ~1.5 seconds for 20 moves, 10 species, 200 items
-    // ~15 seconds for 913 moves, 905 species, 200 items
-    // ~94 seconds for 4000 moves, 4000 species, 1000 items
-    // ~136 seconds for 5000 moves, 5000 species, 2000 items
     void "save pokemon trainer graph"() {
         given:
-        def moves = TestDataGenerator.generateMoves(913)
-        moveRepository.saveAll(moves)
-        def species = TestDataGenerator.generateSpecies(moves, 905)
-        speciesRepository.saveAll(species)
-        def items = TestDataGenerator.generateItems(200)
-
-        def entries = TestDataGenerator.generateEntries(species)
-        def pokemon = TestDataGenerator.generatePokemon(species)
-        def team = pokemon.subList(0, 6)
-        def boxes = TestDataGenerator.generateBoxes(pokemon.subList(6, pokemon.size()), 50)
-
-        def pc = PC.builder()
-                .uuid(UUID.randomUUID().toString())
-                .boxes(boxes)
-                .itemBox(items.subList(100, items.size()))
-                .build()
-        def pokedex = Pokedex.builder()
-                .uuid(UUID.randomUUID().toString())
-                .entries(entries)
-                .build()
-        def mark = Trainer.builder()
-                .name("Mark")
-                .uuid(UUID.randomUUID().toString())
-                .team(team)
-                .pokedex(pokedex)
-                .pc(pc)
-                .inventory(items.subList(0, 100))
-                .build()
-        pokemon.forEach(p -> p.setOwner(mark))
+        def mark = initTrainer("Mark")
         when:
+        System.out.println("Congratulations " + mark.getName() + "!")
+        System.out.println("You have collected every single pokemon!")
+        System.out.println("You collected all " + mark.getPokedex().getEntries().size() + " pokemon.")
+        System.out.println("Do you want to save?")
+        System.out.println("saving...")
+
         def beginWrite = System.currentTimeMillis()
         trainerRepository.save(mark)
         def endWrite = System.currentTimeMillis()
 
-//        def beginRead = System.currentTimeMillis()
-//        def trainer = trainerRepository.findByUuid(mark.getName())
-//        def endRead = System.currentTimeMillis()
-
-//        def t = trainer.getTeam()
-//        def box0 = trainer.getPc().getBoxes().get(0)
-//        def toKeep = t.subList(0, 4)
-//        toKeep.addAll(box0.getPokemon())
-//        box0.setPokemon(toKeep)
-//        trainer.setTeam([])
-
-//        def beginUpdate = System.currentTimeMillis()
-//        trainerRepository.save(trainer)
-//        def endUpdate = System.currentTimeMillis()
-
         def writeSeconds = (endWrite - beginWrite) / 1000
-        System.out.println("WRITE TIME: " + writeSeconds + " seconds")
-//        def readSeconds = (endRead - beginRead) / 1000
-//        System.out.println("READ TIME: " + readSeconds + " seconds")
-//        def updateSeconds = (endUpdate - beginUpdate) / 1000
-//        System.out.println("UPDATE TIME: " + updateSeconds + " seconds")
-
+        System.out.println("save completed in " + writeSeconds + " seconds")
         then:
-        true
+        mark
     }
 
-    // ~1.3 seconds for 20 moves, 10 species, 200 items
-    // ~4 seconds for 913 moves, 905 species, 200 items
-    // ~14 seconds for 4000 moves, 4000 species, 1000 items
-    // ~16 seconds for 5000 moves, 5000 species, 2000 items
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     void "performant save"() {
         given:
-        def moves = TestDataGenerator.generateMoves(913)
+        def ash = initTrainer("Ash")
+        when:
+        def beginWrite = System.currentTimeMillis()
+        trainerRepository.saveTrainer(ash)
+        def endWrite = System.currentTimeMillis()
+        def writeSeconds = (endWrite - beginWrite) / 1000
+        System.out.println("save completed in " + writeSeconds + " seconds")
+        then:
+        ash
+    }
+
+    void "projection save"() {
+        given:
+        def red = initTrainer("Red")
+        when:
+        def result = trainerRepository.saveProjection(red)
+        def lookup = trainerRepository.findByUuid(red.getUuid())
+        then:
+        result
+        lookup
+        lookup.getPokedex() == null
+        lookup.getTeam().size() == 6
+    }
+
+    /**
+     * Initialize trainer for the test. I just have this here to make the tests easier to read.
+     * Notice that I save moves and species ahead of time. When our test saves it will actually do an upsert.
+     */
+    private Trainer initTrainer(String name) {
+        def moves = TestDataGenerator.generateMoves(NUM_MOVES)
         moveRepository.saveAll(moves)
-        def species = TestDataGenerator.generateSpecies(moves, 905)
+        def species = TestDataGenerator.generateSpecies(moves, NUM_SPECIES)
         speciesRepository.saveAll(species)
-        def items = TestDataGenerator.generateItems(200)
+        def items = TestDataGenerator.generateItems(NUM_ITEMS)
 
         def entries = TestDataGenerator.generateEntries(species)
         def pokemon = TestDataGenerator.generatePokemon(species)
@@ -132,43 +131,15 @@ class TrainerRepositorySpec extends Specification {
                 .uuid(UUID.randomUUID().toString())
                 .entries(entries)
                 .build()
-        def mark = Trainer.builder()
-                .name("Mark")
+        def trainer = Trainer.builder()
+                .name(name)
                 .uuid(UUID.randomUUID().toString())
                 .team(team)
                 .pokedex(pokedex)
                 .pc(pc)
                 .inventory(items.subList(0, 100))
                 .build()
-        pokemon.forEach(p -> p.setOwner(mark))
-        when:
-        def beginWrite = System.currentTimeMillis()
-        trainerRepository.saveTrainer(mark)
-        def endWrite = System.currentTimeMillis()
-
-//        def beginRead = System.currentTimeMillis()
-//        def trainer = trainerRepository.findByUuid(mark.getUuid())
-//        def endRead = System.currentTimeMillis()
-//
-//        def t = trainer.getTeam()
-//        def box0 = trainer.getPc().getBoxes().get(0)
-//        def toKeep = t.subList(0, 4)
-//        toKeep.addAll(box0.getPokemon())
-//        box0.setPokemon(toKeep)
-//        trainer.setTeam([])
-//
-//        def beginUpdate = System.currentTimeMillis()
-//        trainerRepository.saveTrainer(trainer)
-//        def endUpdate = System.currentTimeMillis()
-
-        def writeSeconds = (endWrite - beginWrite) / 1000
-        System.out.println("WRITE TIME: " + writeSeconds + " seconds")
-//        def readSeconds = (endRead - beginRead) / 1000
-//        System.out.println("READ TIME: " + readSeconds + " seconds")
-//        def updateSeconds = (endUpdate - beginUpdate) / 1000
-//        System.out.println("UPDATE TIME: " + updateSeconds + " seconds")
-
-        then:
-        true
+        pokemon.forEach(p -> p.setOwner(trainer))
+        return trainer
     }
 }
