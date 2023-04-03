@@ -8,6 +8,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.neo4j.core.Neo4jClient;
+import org.springframework.data.neo4j.core.Neo4jTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -19,22 +20,112 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
     private static final int BATCH_SIZE = 1000;
 
     private final Neo4jClient neo4jClient;
-
+    private final Neo4jTemplate neo4jTemplate;
     private final ObjectMapper objectMapper;
 
-    public TrainerCustomRepositoryImpl(Neo4jClient neo4jClient, ObjectMapper objectMapper) {
+    public TrainerCustomRepositoryImpl(Neo4jClient neo4jClient, Neo4jTemplate neo4jTemplate, ObjectMapper objectMapper) {
         this.neo4jClient = neo4jClient;
+        this.neo4jTemplate = neo4jTemplate;
         this.objectMapper = objectMapper;
     }
 
-    // TODO javadoc
+    /**
+     * Trainer graph to save. Will upsert all nodes in the graph.
+     */
     @Override
     public void saveTrainer(Trainer trainer) {
         TrainerSaveInput.TrainerInput prepared = prepareInput(trainer);
         upsertFullTrainer(prepared);
-        deleteDetached(trainer.getUuid(), prepared);
+        deleteDetached(trainer.getUuid());
     }
 
+    @Override
+    public TrainerTeamProjection saveProjection(Trainer trainer) {
+        return this.neo4jTemplate.saveAs(trainer, TrainerTeamProjection.class);
+    }
+
+    /**
+     * Upsert the full trainer. Saves each node type and relationship type separately.
+     */
+    private void upsertFullTrainer(TrainerSaveInput.TrainerInput input) {
+        // nodes
+        executeWithJson(TrainerSaveQuery.TrainerNode, input.getTrainers());
+        executeWithJson(TrainerSaveQuery.PokedexNode, input.getPokedexes());
+        executeWithJson(TrainerSaveQuery.PCNode, input.getPcs());
+        executeWithJson(TrainerSaveQuery.ItemNode, input.getItems());
+        executeWithJson(TrainerSaveQuery.BoxNode, input.getBoxes());
+        executeWithJson(TrainerSaveQuery.PokedexEntryNode, input.getEntries());
+        executeWithJson(TrainerSaveQuery.MoveNode, input.getMoves());
+        executeWithJson(TrainerSaveQuery.PokemonNode, input.getPokemon());
+        executeWithJson(TrainerSaveQuery.SpeciesNode, input.getSpecies());
+        executeWithJson(TrainerSaveQuery.StatsNode, input.getStats());
+
+        // relationships
+        executeWithJson(TrainerSaveQuery.OwnsRelationship, input.getOwns());
+        executeWithJson(TrainerSaveQuery.AccessToRelationship, input.getAccessTo());
+        executeWithJson(TrainerSaveQuery.HasOnTeamRelationship, input.getHasOnTeam());
+        executeWithJson(TrainerSaveQuery.HasItemRelationship, input.getHasItem());
+        executeWithJson(TrainerSaveQuery.HasBoxRelationship, input.getHasBox());
+        executeWithJson(TrainerSaveQuery.ContainsRelationship, input.getBoxContains());
+        executeWithJson(TrainerSaveQuery.ContainsItemsRelationship, input.getPcContains());
+        executeWithJson(TrainerSaveQuery.HasMoveRelationship, input.getHasMove());
+        executeWithJson(TrainerSaveQuery.HasStatsRelationship, input.getPokemonHasStats());
+        executeWithJson(TrainerSaveQuery.HasBaseStatsRelationship, input.getSpeciesHasStats());
+        executeWithJson(TrainerSaveQuery.IsARelationship, input.getIsA());
+        executeWithJson(TrainerSaveQuery.HoldingRelationship, input.getHolding());
+        executeWithJson(TrainerSaveQuery.CatalogsRelationship, input.getCatalogs());
+        executeWithJson(TrainerSaveQuery.EntryForRelationship, input.getEntryFor());
+        executeWithJson(TrainerSaveQuery.BelongsToRelationship, input.getBelongsTo());
+        executeWithJson(TrainerSaveQuery.EvolvesIntoRelationship, input.getEvolvesInto());
+        executeWithJson(TrainerSaveQuery.LearnsMoveRelationship, input.getLearnMoves());
+    }
+
+    /**
+     * It's possible for nodes to get orphaned as a result of an update. We want to clean up those nodes.
+     */
+    private void deleteDetached(String trainerUUID) {
+        execute(TrainerSaveQuery.DeletePokemon, trainerUUID);
+        execute(TrainerSaveQuery.DeleteStats, trainerUUID);
+        // We can extend this for more node types, depending on our needs.
+    }
+
+    /**
+     * Execute query against data, which will be serialized to JSON.
+     */
+    private void executeWithJson(String query, List<?> data) {
+        Lists.partition(data, BATCH_SIZE).forEach(b ->
+            this.neo4jClient.query(query)
+                    .bind(toJson(b)).to(TrainerSaveQuery.InputBindingName)
+                    .fetch().all()
+        );
+    }
+
+    /**
+     * Execute query relative to root node with given UUID.
+     */
+    private void execute(String query, String uuid) {
+        this.neo4jClient.query(query)
+                .bind(uuid).to(TrainerSaveQuery.UUIDBindingName)
+                .fetch().all();
+    }
+
+    /**
+     * Serialize object to JSON. Only should apply to neo4j queries that take JSON as input.
+     * @param toSerialize Probably one of the types in TrainerSaveInput.
+     * @return Object as JSON string.
+     */
+    private String toJson(Object toSerialize) {
+        try {
+            return objectMapper.writeValueAsString(toSerialize);
+        } catch (JsonProcessingException e) {
+            throw new SerializationError(e, toSerialize);
+        }
+    }
+
+    /**
+     * Map Trainer into intermediate model for saving. This is an annoying amount of code that the ORM would otherwise
+     * do for us.
+     */
     private TrainerSaveInput.TrainerInput prepareInput(Trainer trainer) {
         // Trainer
         var trainerNodes = List.of(TrainerSaveInput.TrainerNode.builder()
@@ -49,7 +140,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
         var pcNodes = List.of(TrainerSaveInput.PCNode.builder()
                 .uuid(trainer.getPc().getUuid())
                 .build());
-
 
         // Pokedex Entries
         var entries = trainer.getPokedex().getEntries();
@@ -86,18 +176,17 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
                 .toList();
 
 
-        // pokemon
+        // Pokemon
         var pokemon = new ArrayList<>(trainer.getTeam());
         boxes.forEach(b -> pokemon.addAll(b.getPokemon()));
         var pokemonNodes = pokemon.stream()
                 .map(p -> TrainerSaveInput.PokemonNode.builder()
-                    .uuid(p.getUuid())
-                    .nickname(p.getNickname())
-                    .build())
+                        .uuid(p.getUuid())
+                        .nickname(p.getNickname())
+                        .build())
                 .toList();
 
-
-        // moves
+        // Moves
         var moves = new ArrayList<Move>();
         pokemon.forEach(p -> moves.addAll(p.getMoves()));
         species.stream()
@@ -106,29 +195,29 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
                 .forEach(moves::add);
         var moveNodes = moves.stream()
                 .map(m -> TrainerSaveInput.MoveNode.builder()
-                    .uuid(m.getUuid())
-                    .name(m.getName())
-                    .description(m.getDescription())
-                    .attackPower(m.getAttackPower())
-                    .accuracy(m.getAccuracy())
-                    .effect(m.getEffect())
-                    .type(m.getType())
-                .build()).toList();
+                        .uuid(m.getUuid())
+                        .name(m.getName())
+                        .description(m.getDescription())
+                        .attackPower(m.getAttackPower())
+                        .accuracy(m.getAccuracy())
+                        .effect(m.getEffect())
+                        .type(m.getType())
+                        .build()).toList();
 
-        // stats
+        // Stats
         var stats = new ArrayList<Stats>();
         pokemon.forEach(p -> stats.add(p.getStats()));
         species.forEach(s -> stats.add(s.getBaseStats()));
         var statsNodes = stats.stream()
                 .map(s -> TrainerSaveInput.StatsNode.builder()
-                    .uuid(s.getUuid())
-                    .hp(s.getHp())
-                    .attack(s.getAttack())
-                    .specialAttack(s.getSpecialAttack())
-                    .defense(s.getDefense())
-                    .specialDefense(s.getDefense())
-                    .speed(s.getSpeed())
-                    .build())
+                        .uuid(s.getUuid())
+                        .hp(s.getHp())
+                        .attack(s.getAttack())
+                        .specialAttack(s.getSpecialAttack())
+                        .defense(s.getDefense())
+                        .specialDefense(s.getDefense())
+                        .speed(s.getSpeed())
+                        .build())
                 .toList();
 
         // Items
@@ -138,11 +227,11 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
         items.addAll(pokemon.stream().map(Pokemon::getHeldItem).toList());
         var itemNodes = items.stream()
                 .map(i -> TrainerSaveInput.ItemNode.builder()
-                    .uuid(i.getUuid())
-                    .name(i.getName())
-                    .effect(i.getEffect())
-                    .sellValue(i.getSellValue())
-                    .build())
+                        .uuid(i.getUuid())
+                        .name(i.getName())
+                        .effect(i.getEffect())
+                        .sellValue(i.getSellValue())
+                        .build())
                 .toList();
 
         var accessTo = List.of(new TrainerSaveInput.UUIDRelationship(trainer.getUuid(), trainer.getPc().getUuid()));
@@ -238,75 +327,9 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
                 learnsMove);
     }
 
-    private void upsertFullTrainer(TrainerSaveInput.TrainerInput input) {
-        // nodes
-        executeWithJson(TrainerSaveQuery.TrainerNode, input.getTrainers());
-        executeWithJson(TrainerSaveQuery.PokedexNode, input.getPokedexes());
-        executeWithJson(TrainerSaveQuery.PCNode, input.getPcs());
-        executeWithJson(TrainerSaveQuery.ItemNode, input.getItems());
-        executeWithJson(TrainerSaveQuery.BoxNode, input.getBoxes());
-        executeWithJson(TrainerSaveQuery.PokedexEntryNode, input.getEntries());
-        executeWithJson(TrainerSaveQuery.MoveNode, input.getMoves());
-        executeWithJson(TrainerSaveQuery.PokemonNode, input.getPokemon());
-        executeWithJson(TrainerSaveQuery.SpeciesNode, input.getSpecies());
-        executeWithJson(TrainerSaveQuery.StatsNode, input.getStats());
-
-        // relationships
-        executeWithJson(TrainerSaveQuery.OwnsRelationship, input.getOwns());
-        executeWithJson(TrainerSaveQuery.AccessToRelationship, input.getAccessTo());
-        executeWithJson(TrainerSaveQuery.HasOnTeamRelationship, input.getHasOnTeam());
-        executeWithJson(TrainerSaveQuery.HasItemRelationship, input.getHasItem());
-        executeWithJson(TrainerSaveQuery.HasBoxRelationship, input.getHasBox());
-        executeWithJson(TrainerSaveQuery.ContainsRelationship, input.getBoxContains());
-        executeWithJson(TrainerSaveQuery.ContainsItemsRelationship, input.getPcContains());
-        executeWithJson(TrainerSaveQuery.HasMoveRelationship, input.getHasMove());
-        executeWithJson(TrainerSaveQuery.HasStatsRelationship, input.getPokemonHasStats());
-        executeWithJson(TrainerSaveQuery.HasBaseStatsRelationship, input.getSpeciesHasStats());
-        executeWithJson(TrainerSaveQuery.IsARelationship, input.getIsA());
-        executeWithJson(TrainerSaveQuery.HoldingRelationship, input.getHolding());
-        executeWithJson(TrainerSaveQuery.CatalogsRelationship, input.getCatalogs());
-        executeWithJson(TrainerSaveQuery.EntryForRelationship, input.getEntryFor());
-        executeWithJson(TrainerSaveQuery.BelongsToRelationship, input.getBelongsTo());
-        executeWithJson(TrainerSaveQuery.EvolvesIntoRelationship, input.getEvolvesInto());
-        executeWithJson(TrainerSaveQuery.LearnsMoveRelationship, input.getLearnMoves());
-    }
-
-    private void deleteDetached(String trainerUUID, TrainerSaveInput.TrainerInput input) {
-        var pokemonOnTeam = input.getHasOnTeam().stream().map(TrainerSaveInput.UUIDRelationship::getTargetNode).toList();
-        executeWithJson(TrainerSaveQuery.DeletePokemonFromTeam, trainerUUID, input);
-
-    }
-
-    // TODO javadoc
-    private void executeWithJson(String query, List<?> data) {
-        Lists.partition(data, BATCH_SIZE).forEach(b ->
-            this.neo4jClient.query(query)
-                    .bind(toJson(b)).to(TrainerSaveQuery.InputBindingName)
-                    .fetch().all()
-        );
-    }
-
-    // TODO javadoc
-    private void executeWithJson(String query, String uuid, Object data) {
-        this.neo4jClient.query(query)
-                .bind(uuid).to(TrainerSaveQuery.UUIDBindingName)
-                .bind(toJson(data)).to(TrainerSaveQuery.InputBindingName)
-                .fetch().all();
-    }
-
     /**
-     * Serialize object to JSON. Only should apply to neo4j queries that take JSON as input.
-     * @param toSerialize Probably one of the types in TrainerSaveInput.
-     * @return Object as JSON string.
+     * Intermediate model that we will use to save to the database.
      */
-    private String toJson(Object toSerialize) {
-        try {
-            return objectMapper.writeValueAsString(toSerialize);
-        } catch (JsonProcessingException e) {
-            throw new SerializationError(e, toSerialize);
-        }
-    }
-
     private static class TrainerSaveInput {
         @Data
         @NoArgsConstructor
@@ -525,54 +548,46 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
         static final String InputBindingName = "input";
         static final String UUIDBindingName = "uuid";
 
-        // TODO do we need to return at all here???
         static final String TrainerNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as trainer_node
             MERGE (t:Trainer{uuid:trainer_node.uuid}) SET t=properties(trainer_node)
-            RETURN id(t) as id
         """;
 
         static final String PokedexNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as pokedex_node
             MERGE (p:Pokedex{uuid:pokedex_node.uuid}) SET p=properties(pokedex_node)
-            RETURN id(p) as id
         """;
 
         static final String PCNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as pc_node
             MERGE (p:PC{uuid:pc_node.uuid}) SET p=properties(pc_node)
-            RETURN id(p) as id
         """;
 
         static final String PokemonNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as pokemon_node
             MERGE (p:Pokemon{uuid:pokemon_node.uuid}) SET p=properties(pokemon_node)
-            RETURN id(p) as id
         """;
 
         static final String PokedexEntryNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as entry_node
             MERGE (p:PokedexEntry{uuid:entry_node.uuid}) SET p=properties(entry_node)
-            RETURN id(p) as id
         """;
 
         static final String SpeciesNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as species_node
             MERGE (s:Species{uuid:species_node.uuid}) SET s=properties(species_node)
-            RETURN id(s) as id
         """;
 
         static final String ItemNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as item_node
             MERGE (i:Item{uuid:item_node.uuid}) SET i=properties(item_node)
-            RETURN id(i) as id
         """;
 
         static final String MoveNode = """
@@ -580,21 +595,18 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             WITH input
             UNWIND input as move_node
             MERGE (m:Move{uuid:move_node.uuid}) SET m=properties(move_node)
-            RETURN id(m) as id
         """;
 
         static final String BoxNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as box_node
             MERGE (b:Box{uuid:box_node.uuid}) SET b=properties(box_node)
-            RETURN id(b) as id
         """;
 
         static final String StatsNode = """
             WITH apoc.convert.fromJsonList($input) AS input
             UNWIND input as stats_node
             MERGE (s:Stats{uuid:stats_node.uuid}) SET s=properties(stats_node)
-            RETURN id(s) as id
         """;
 
         static final String HasOnTeamRelationship = """
@@ -603,7 +615,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Trainer) WHERE a.uuid = relation.sourceNode
             MATCH (b: Pokemon) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_ON_TEAM]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String OwnsRelationship = """
@@ -612,7 +623,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Trainer) WHERE a.uuid = relation.sourceNode
             MATCH (b: Pokedex) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:OWNS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String AccessToRelationship = """
@@ -621,7 +631,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Trainer) WHERE a.uuid = relation.sourceNode
             MATCH (b: PC) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:ACCESS_TO]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HasItemRelationship = """
@@ -630,7 +639,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Trainer) WHERE a.uuid = relation.sourceNode
             MATCH (b: Item) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_ITEM]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HasBoxRelationship = """
@@ -639,7 +647,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: PC) WHERE a.uuid = relation.sourceNode
             MATCH (b: Box) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_BOX]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String ContainsItemsRelationship = """
@@ -648,7 +655,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: PC) WHERE a.uuid = relation.sourceNode
             MATCH (b: Item) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:CONTAINS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String CatalogsRelationship = """
@@ -657,7 +663,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokedex) WHERE a.uuid = relation.sourceNode
             MATCH (b: PokedexEntry) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:CATALOGS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String EntryForRelationship = """
@@ -666,7 +671,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: PokedexEntry) WHERE a.uuid = relation.sourceNode
             MATCH (b: Species) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:ENTRY_FOR]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String IsARelationship = """
@@ -675,7 +679,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokemon) WHERE a.uuid = relation.sourceNode
             MATCH (b: Species) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:IS_A]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HasBaseStatsRelationship = """
@@ -684,7 +687,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Species) WHERE a.uuid = relation.sourceNode
             MATCH (b: Stats) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_STATS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HasStatsRelationship = """
@@ -693,7 +695,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokemon) WHERE a.uuid = relation.sourceNode
             MATCH (b: Stats) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_STATS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HoldingRelationship = """
@@ -702,7 +703,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokemon) WHERE a.uuid = relation.sourceNode
             MATCH (b: Item) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HOLDING]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String BelongsToRelationship = """
@@ -711,7 +711,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokemon) WHERE a.uuid = relation.sourceNode
             MATCH (b: Trainer) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:BELONGS_TO]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String HasMoveRelationship = """
@@ -720,7 +719,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Pokemon) WHERE a.uuid = relation.sourceNode
             MATCH (b: Move) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HAS_MOVE]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String ContainsRelationship = """
@@ -729,7 +727,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Box) WHERE a.uuid = relation.sourceNode
             MATCH (b: Pokemon) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:CONTAINS]->(b)
-            RETURN id(r) AS id
         """;
 
         static final String LearnsMoveRelationship = """
@@ -738,7 +735,6 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Species) WHERE a.uuid = relation.sourceNode
             MATCH (b: Move) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HOLDING]->(b) SET r=relation.properties
-            RETURN id(r) AS id
         """;
 
         static final String EvolvesIntoRelationship = """
@@ -747,16 +743,19 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             MATCH (a: Species) WHERE a.uuid = relation.sourceNode
             MATCH (b: Species) WHERE b.uuid = relation.targetNode
             MERGE (a)-[r:HOLDING]->(b) SET r=relation.properties
-            RETURN id(r) AS id
         """;
 
-        static final String DeletePokemonFromTeam = """     
-            WITH apoc.convert.fromJsonList($input) AS input
-            MATCH (t:Trailer)-->(p:Pokemon) where t.uuid = $uuid and NOT p.uuid in input
-            DETACH DELETE p
+        static final String DeletePokemon = """ 
+            MATCH (n:Pokemon)
+            WHERE (NOT (n)<-[]-(:Trainer{uuid:$uuid})) AND (NOT (n)<-[]-(:Box))
+            DETACH DELETE n
         """;
 
-
+        static final String DeleteStats = """ 
+            MATCH (n:Stats)
+            WHERE (NOT (n)<-[]-(:Pokemon)) AND (NOT (n)<-[]-(:Species))
+            DETACH DELETE n
+        """;
     }
 
 
