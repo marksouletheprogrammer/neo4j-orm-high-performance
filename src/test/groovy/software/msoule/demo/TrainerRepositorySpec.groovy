@@ -41,6 +41,10 @@ class TrainerRepositorySpec extends Specification {
     @Autowired
     private TrainerRepository trainerRepository
 
+    private final int NUM_MOVES = 4000
+    private final int NUM_SPECIES = 4000
+    private final int NUM_ITEMS = 800
+
     def setup() {
         jdbcTemplate.execute("TRUNCATE TABLE box CASCADE")
         jdbcTemplate.execute("TRUNCATE TABLE item CASCADE")
@@ -56,13 +60,13 @@ class TrainerRepositorySpec extends Specification {
 
     void "save pokemon trainer relations"() {
         given:
-        def moves = TestDataGenerator.generateMoves(4000)
+        def moves = TestDataGenerator.generateMoves(NUM_MOVES)
         moveRepository.saveAll(moves)
-        def species = TestDataGenerator.generateSpecies(moves, 4000)
+        def species = TestDataGenerator.generateSpecies(moves, NUM_SPECIES)
         def stats = species.stream().map(Species::getBaseStats).toList()
         statsRepository.saveAll(stats)
         speciesRepository.saveAll(species)
-        def items = TestDataGenerator.generateItems(1000)
+        def items = TestDataGenerator.generateItems(NUM_ITEMS)
         def entries = TestDataGenerator.generateEntries(species)
         def pokemon = TestDataGenerator.generatePokemon(species)
         def pokemonStats = pokemon.stream().map(Pokemon::getStats).toList()
