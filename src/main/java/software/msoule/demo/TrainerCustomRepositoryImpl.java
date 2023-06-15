@@ -734,7 +734,7 @@ public class TrainerCustomRepositoryImpl implements TrainerCustomRepository {
             UNWIND input AS relation
             MATCH (a: Species) WHERE a.uuid = relation.sourceNode
             MATCH (b: Move) WHERE b.uuid = relation.targetNode
-            MERGE (a)-[r:HOLDING]->(b) SET r=relation.properties
+            MERGE (a)-[r:LEARNS_MOVE]->(b) SET r=relation.properties
         """;
 
         static final String EvolvesIntoRelationship = """
